@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI-Powered Corporate Landing Page Generator</title>
-    <link rel="shortcut icon" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQmNDwgWFyeYpT52RxbZQBd9nx7HI5QntO3xA&s" type="image/x-icon">
+    <link rel="icon" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQmNDwgWFyeYpT52RxbZQBd9nx7HI5QntO3xA&s"
+        type="image/x-icon">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/interactjs/dist/interact.min.js"></script>
     <style>
@@ -195,8 +196,7 @@
                     class="bg-indigo-600 text-white p-3 rounded-lg w-full hover:bg-indigo-500 button shadow"
                     onclick="alert('Download clicked')">Download</button>
                 <button id="save-project"
-                    class="bg-green-600 text-white p-3 rounded-lg w-full hover:bg-green-500 button shadow"
-                    onclick="alert('Save clicked')">Save</button>
+                    class="bg-green-600 text-white p-3 rounded-lg w-full hover:bg-green-500 button shadow">Save</button>
             </div>
             <h2 class="text-xl font-semibold text-gray-800 mt-6 mb-4">History</h2>
             <div class="space-y-2">
@@ -241,81 +241,359 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/interactjs/dist/interact.min.js"></script>
     <script>
-        // Make sidebar items draggable
-        interact('.draggable').draggable({
-            inertia: true,
-            autoScroll: true,
-            listeners: {
-                move(event) {
-                    let target = event.target;
-                    let x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
-                    let y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('canvas');
+            const toggleBtn = document.getElementById("mobile-menu-toggle");
+            const sidebar = document.querySelector("aside");
 
-                    target.style.transform = `translate(${x}px, ${y}px)`;
-                    target.setAttribute('data-x', x);
-                    target.setAttribute('data-y', y);
-                },
-                end(event) {
-                    // reset after drag from sidebar
-                    event.target.style.transform = "";
-                    event.target.removeAttribute('data-x');
-                    event.target.removeAttribute('data-y');
-                }
+
+            // Toggle button ক্লিক
+            toggleBtn.addEventListener("click", () => {
+                sidebar.classList.toggle("hidden");
+            });
+
+         
+
+            // Undo/Redo stacks
+            let undoStack = [];
+            let redoStack = [];
+
+            // Helpers to parse transform translate(...) values
+            function parseTranslate(transform) {
+                if (!transform) return { x: 0, y: 0 };
+                const m = transform.match(/translate\(\s*([-0-9.]+)px,\s*([-0-9.]+)px\s*\)/);
+                return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
             }
-        });
 
-        // Canvas as dropzone
-        interact('#canvas').dropzone({
-            accept: '.draggable',
-            overlap: 0.5,
-            ondrop(event) {
-                let type = event.relatedTarget.getAttribute('data-type');
-                let newEl = document.createElement('div');
-                newEl.className = "absolute px-4 py-2 rounded-lg shadow text-white cursor-move";
-                newEl.style.top = (event.dragEvent.pageY - event.target.getBoundingClientRect().top - 30) + "px";
-                newEl.style.left = (event.dragEvent.pageX - event.target.getBoundingClientRect().left - 60) + "px";
-
-                if (type === "button") {
-                    newEl.innerText = "New Button";
-                    newEl.classList.add("bg-indigo-600");
-                } else if (type === "text") {
-                    newEl.innerText = "New Text";
-                    newEl.classList.add("bg-green-600");
-                } else if (type === "image") {
-                    newEl.innerText = "Image Box";
-                    newEl.classList.add("bg-purple-600");
-                }
-
-                newEl.classList.add("draggable-inside");
-                event.target.appendChild(newEl);
-                makeInsideDraggable(newEl);
+            // Save canvas top-level items (keep outerHTML so groups are preserved)
+            function saveCanvasState() {
+                const items = [];
+                // take top-level children that were added to canvas (groups or draggable-inside)
+                canvas.querySelectorAll(':scope > .draggable-inside, :scope > .group').forEach(el => {
+                    // prefer data-x/data-y if present, else read transform
+                    let x = parseFloat(el.getAttribute('data-x'));
+                    let y = parseFloat(el.getAttribute('data-y'));
+                    if (isNaN(x) || isNaN(y)) {
+                        const pt = parseTranslate(el.style.transform);
+                        x = pt.x; y = pt.y;
+                    }
+                    items.push({
+                        html: el.outerHTML,
+                        x: x || 0,
+                        y: y || 0
+                    });
+                });
+                return JSON.stringify(items);
             }
-        });
 
-        // Make dropped elements draggable inside canvas
-        function makeInsideDraggable(el) {
-            interact(el).draggable({
+            // Restore saved state (recreate elements, apply transform & data-x/y)
+            function restoreCanvasState(stateStr) {
+                canvas.innerHTML = '';
+                if (!stateStr) return;
+                let items = [];
+                try { items = JSON.parse(stateStr); } catch (e) { return; }
+                items.forEach(it => {
+                    const tmp = document.createElement('div');
+                    tmp.innerHTML = it.html;
+                    const el = tmp.firstElementChild;
+                    if (!el) return;
+                    el.classList.add('draggable-inside');
+                    el.setAttribute('data-x', it.x);
+                    el.setAttribute('data-y', it.y);
+                    el.style.transform = `translate(${it.x}px, ${it.y}px)`;
+                    canvas.appendChild(el);
+                    makeInsideDraggable(el);
+                });
+                // clear selection visuals
+                canvas.querySelectorAll('.selected').forEach(s => s.classList.remove('selected', 'ring', 'ring-2', 'ring-blue-400'));
+            }
+
+            function updateStatus(message) {
+                document.getElementById('status').innerText = message;
+                setTimeout(() => {
+                    document.getElementById('status').innerText = 'Ready';
+                }, 2000);
+            }
+
+            function updateUndoRedoButtons() {
+                const undoBtn = document.getElementById('undo');
+                const redoBtn = document.getElementById('redo');
+                undoBtn.disabled = undoStack.length <= 1;
+                redoBtn.disabled = redoStack.length === 0;
+                undoBtn.classList.toggle('opacity-50', undoBtn.disabled);
+                redoBtn.classList.toggle('opacity-50', redoBtn.disabled);
+            }
+
+            function pushState() {
+                undoStack.push(saveCanvasState());
+                // new action clears redo
+                redoStack = [];
+                updateUndoRedoButtons();
+            }
+
+            // Make palette items draggable (from sidebar) - same as before
+            interact('.draggable').draggable({
+                inertia: true,
+                autoScroll: true,
                 listeners: {
                     move(event) {
                         let target = event.target;
                         let x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
                         let y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
-
                         target.style.transform = `translate(${x}px, ${y}px)`;
                         target.setAttribute('data-x', x);
                         target.setAttribute('data-y', y);
+                    },
+                    end(event) {
+                        // reset after drag from sidebar (palette items should not stay moved)
+                        event.target.style.transform = "";
+                        event.target.removeAttribute('data-x');
+                        event.target.removeAttribute('data-y');
                     }
                 }
             });
-        }
 
-        const toggleBtn = document.getElementById("mobile-menu-toggle");
-        const sidebar = document.querySelector("aside");
+            // Canvas dropzone: create element with transform & data-x/y (consistent)
+            interact('#canvas').dropzone({
+                accept: '.draggable',
+                overlap: 0.5,
+                ondrop(event) {
+                    let type = event.relatedTarget.getAttribute('data-type');
+                    let newEl = document.createElement('div');
+                    newEl.className = "absolute px-4 py-2 rounded-lg shadow text-white cursor-move draggable-inside";
+                    const canvasRect = event.target.getBoundingClientRect();
+                    const x = Math.round(event.dragEvent.pageX - canvasRect.left - 60);
+                    const y = Math.round(event.dragEvent.pageY - canvasRect.top - 30);
 
-        toggleBtn.addEventListener("click", () => {
-            sidebar.classList.toggle("hidden");
-        });
+                    newEl.style.transform = `translate(${x}px, ${y}px)`;
+                    newEl.setAttribute('data-x', x);
+                    newEl.setAttribute('data-y', y);
+                    newEl.setAttribute('data-type', type || 'unknown');
+
+                    if (type === "button") {
+                        newEl.innerText = "New Button";
+                        newEl.classList.add("bg-indigo-600");
+                    } else if (type === "text") {
+                        newEl.innerText = "New Text";
+                        newEl.classList.add("bg-green-600");
+                    } else if (type === "image") {
+                        newEl.innerText = "Image Box";
+                        newEl.classList.add("bg-purple-600");
+                    }
+
+                    event.target.appendChild(newEl);
+                    makeInsideDraggable(newEl);
+
+                    // record action after element is added
+                    pushState();
+                    updateStatus('Element added');
+                }
+            });
+
+            // Make dropped elements draggable inside canvas and track drag-end
+            function makeInsideDraggable(el) {
+                interact(el).draggable({
+                    listeners: {
+                        move(event) {
+                            let target = event.target;
+                            let x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                            let y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+                            target.style.transform = `translate(${x}px, ${y}px)`;
+                            target.setAttribute('data-x', x);
+                            target.setAttribute('data-y', y);
+                        },
+                        end(event) {
+                            // record position after user finishes dragging
+                            pushState();
+                        }
+                    }
+                });
+            }
+
+            // Selection handling (click to select)
+            canvas.addEventListener('click', (e) => {
+                if (e.target !== canvas) {
+                    canvas.querySelectorAll('.selected').forEach(el => el.classList.remove('selected', 'ring', 'ring-2', 'ring-blue-400'));
+                    e.target.classList.add('selected', 'ring', 'ring-2', 'ring-blue-400');
+                } else {
+                    canvas.querySelectorAll('.selected').forEach(el => el.classList.remove('selected', 'ring', 'ring-2', 'ring-blue-400'));
+                }
+            });
+
+            // Delete
+            document.getElementById('delete').addEventListener('click', () => {
+                const selected = canvas.querySelector('.selected');
+                if (selected) {
+                    selected.remove();
+                    pushState();
+                    updateStatus('Element deleted');
+                } else {
+                    updateStatus('No element selected');
+                }
+            });
+
+            // Duplicate (with incremental offset)
+            let duplicateOffset = 20;
+            document.getElementById('duplicate').addEventListener('click', () => {
+                const selected = canvas.querySelector('.selected');
+                if (selected) {
+                    const clone = selected.cloneNode(true);
+                    // get current position
+                    const curX = parseFloat(selected.getAttribute('data-x')) || parseTranslate(selected.style.transform).x || 0;
+                    const curY = parseFloat(selected.getAttribute('data-y')) || parseTranslate(selected.style.transform).y || 0;
+                    const newX = curX + duplicateOffset;
+                    const newY = curY + duplicateOffset;
+                    clone.setAttribute('data-x', newX);
+                    clone.setAttribute('data-y', newY);
+                    clone.style.transform = `translate(${newX}px, ${newY}px)`;
+                    // remove selection from clone
+                    clone.classList.remove('selected', 'ring', 'ring-2', 'ring-blue-400');
+                    canvas.appendChild(clone);
+                    makeInsideDraggable(clone);
+                    duplicateOffset += 20;
+                    pushState();
+                    updateStatus('Element duplicated');
+                } else {
+                    updateStatus('No element selected');
+                }
+            });
+
+            // Group
+            document.getElementById('group').addEventListener('click', () => {
+                const selectedItems = canvas.querySelectorAll('.selected');
+                if (selectedItems.length > 1) {
+                    const group = document.createElement('div');
+                    group.className = 'absolute group border border-dashed border-gray-400 p-2';
+                    let top = Infinity, left = Infinity;
+                    selectedItems.forEach(el => {
+                        const rect = el.getBoundingClientRect();
+                        const parentRect = canvas.getBoundingClientRect();
+                        top = Math.min(top, rect.top - parentRect.top);
+                        left = Math.min(left, rect.left - parentRect.left);
+                    });
+                    group.style.transform = `translate(${left}px, ${top}px)`;
+                    group.setAttribute('data-x', left);
+                    group.setAttribute('data-y', top);
+                    canvas.appendChild(group);
+                    // move items into group and reset their local transforms
+                    selectedItems.forEach(el => {
+                        // convert absolute position into group's local coordinates (we'll reset child transform to 0)
+                        el.style.transform = `translate(0px, 0px)`;
+                        el.removeAttribute('data-x');
+                        el.removeAttribute('data-y');
+                        group.appendChild(el);
+                    });
+                    makeInsideDraggable(group);
+                    pushState();
+                    updateStatus('Elements grouped');
+                } else {
+                    updateStatus('Select 2+ elements to group');
+                }
+            });
+
+            // Ungroup
+            document.getElementById('ungroup').addEventListener('click', () => {
+                const groups = canvas.querySelectorAll('.group');
+                if (!groups.length) { updateStatus('No groups to ungroup'); return; }
+                groups.forEach(group => {
+                    const parentRect = canvas.getBoundingClientRect();
+                    const gPos = parseTranslate(group.style.transform);
+                    while (group.firstChild) {
+                        const child = group.firstChild;
+                        // place child at group's absolute position
+                        const childX = gPos.x;
+                        const childY = gPos.y;
+                        child.classList.add('draggable-inside');
+                        child.setAttribute('data-x', childX);
+                        child.setAttribute('data-y', childY);
+                        child.style.transform = `translate(${childX}px, ${childY}px)`;
+                        canvas.appendChild(child);
+                        makeInsideDraggable(child);
+                    }
+                    group.remove();
+                });
+                pushState();
+                updateStatus('Groups ungrouped');
+            });
+
+            // Save to localStorage (new format key: canvasState)
+            document.getElementById('save-project').addEventListener('click', () => {
+                localStorage.setItem('canvasState', saveCanvasState());
+                updateStatus('Project saved to LocalStorage');
+                alert('Project saved!');
+            });
+
+            // Load saved project if exists (support new and old format)
+            function loadSaved() {
+                const savedNew = localStorage.getItem('canvasState');
+                const savedOld = localStorage.getItem('canvasData'); // legacy from earlier code
+                if (savedNew) {
+                    restoreCanvasState(savedNew);
+                    updateStatus('Project loaded from LocalStorage');
+                } else if (savedOld) {
+                    // legacy loader: canvasData was array of {type, text, style}
+                    try {
+                        const arr = JSON.parse(savedOld);
+                        arr.forEach(elData => {
+                            const newEl = document.createElement('div');
+                            newEl.innerText = elData.text;
+                            newEl.className = elData.style.className || 'draggable-inside';
+                            // attempt to restore transform/position from stored style
+                            if (elData.style && elData.style.transform) {
+                                newEl.style.transform = elData.style.transform;
+                                const pt = parseTranslate(elData.style.transform);
+                                newEl.setAttribute('data-x', pt.x);
+                                newEl.setAttribute('data-y', pt.y);
+                            } else {
+                                newEl.style.top = elData.style.top || '0px';
+                                newEl.style.left = elData.style.left || '0px';
+                            }
+                            newEl.classList.add('draggable-inside');
+                            canvas.appendChild(newEl);
+                            makeInsideDraggable(newEl);
+                        });
+                        updateStatus('Old-format project loaded');
+                    } catch (e) {
+                        console.warn('Failed to parse legacy canvasData', e);
+                    }
+                }
+                // After loading, push initial state so undo has a baseline
+                pushState();
+            }
+
+            // Undo
+            document.getElementById('undo').addEventListener('click', () => {
+                if (undoStack.length > 1) {
+                    const current = undoStack.pop();
+                    redoStack.push(current);
+                    const prev = undoStack[undoStack.length - 1];
+                    restoreCanvasState(prev);
+                    updateUndoRedoButtons();
+                    updateStatus('Undo performed');
+                } else {
+                    updateStatus('Nothing to undo');
+                }
+            });
+
+            // Redo
+            document.getElementById('redo').addEventListener('click', () => {
+                if (redoStack.length > 0) {
+                    const state = redoStack.pop();
+                    restoreCanvasState(state);
+                    undoStack.push(state);
+                    updateUndoRedoButtons();
+                    updateStatus('Redo performed');
+                } else {
+                    updateStatus('Nothing to redo');
+                }
+            });
+
+            // INITIALIZE: load any saved canvas
+            loadSaved();
+        }); // DOMContentLoaded
     </script>
+
+
 </body>
 
 </html>
