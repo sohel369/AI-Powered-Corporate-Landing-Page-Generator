@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Corporate Landing Page Generator</title>
+    <link rel="shortcut icon" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQmNDwgWFyeYpT52RxbZQBd9nx7HI5QntO3xA&s" type="image/x-icon">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/interactjs/dist/interact.min.js"></script>
+    <style>
+        body {
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><circle cx="12" cy="12" r="10" fill="rgba(59,130,246,0.5)" stroke="white" stroke-width="2"/></svg>') 12 12, auto;
+        }
+
+        #canvas {
+            background-image: linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
+                linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
+                linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border-radius: 12px;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.1);
+            transition: background 0.3s ease;
+        }
+
+        .draggable {
+            touch-action: none;
+            user-select: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border-radius: 10px;
+        }
+
+        .draggable:hover {
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+            transform: scale(1.02);
+        }
+
+        .modal {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .context-menu {
+            animation: fadeIn 0.2s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .button {
+            transition: all 0.2s ease, transform 0.1s ease;
+        }
+
+        .button:hover {
+            transform: translateY(-3px) scale(1.03);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+        }
+
+        .button:active {
+            transform: translateY(0) scale(1);
+        }
+
+        /* User Profile */
+        .user-id {
+            background: linear-gradient(135deg, #4f46e5, #3b82f6);
+            padding: 2px 8px;
+            border-radius: 12px;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9rem;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            aside {
+                width: 100%;
+                position: fixed;
+                height: 100%;
+                z-index: 100;
+            }
+
+            header nav {
+                display: none;
+            }
+
+            #canvas {
+                margin: 1rem;
+
+            }
+
+            .mobile-menu {
+                display: none;
+            }
+
+            .mobile-menu.active {
+                display: block;
+            }
+        }
+    </style>
+</head>
+
+<body class="flex flex-col min-h-screen bg-gray-50 font-sans">
+
+    <!-- Header -->
+    <header
+        class="bg-gradient-to-r from-indigo-600 to-blue-700 text-white p-4 flex justify-between items-center shadow-xl">
+        <div class="flex items-center space-x-4">
+            <img src="https://i.ibb.co/1R0F14V/logo.png" alt="Logo"
+                class="h-12 rounded-full border-2 border-white shadow-md">
+            <nav class="hidden md:flex">
+                <ul class="flex space-x-6 text-sm font-medium">
+                    <li><a href="#" class="hover:text-blue-200 transition-colors">File</a></li>
+                    <li><a href="#" class="hover:text-blue-200 transition-colors">Edit</a></li>
+                    <li><a href="#" class="hover:text-blue-200 transition-colors">View</a></li>
+                    <li><a href="#" class="hover:text-blue-200 transition-colors">Plugins</a></li>
+                    <li><a href="#" class="hover:text-blue-200 transition-colors">Help</a></li>
+                </ul>
+            </nav>
+        </div>
+        <div class="flex items-center space-x-3">
+            <span class="user-id" id="user-id">User#1234</span>
+            <button id="user-settings"
+                class="p-2 bg-indigo-500 rounded-full hover:bg-indigo-400 button shadow">⚙️</button>
+        </div>
+        <button id="mobile-menu-toggle"
+            class="md:hidden p-2 bg-indigo-500 rounded-full hover:bg-indigo-400 button shadow">☰</button>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="flex-1 flex overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white p-6 overflow-y-auto shadow-md md:block hidden rounded-r-xl">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Objects</h2>
+            <div id="object-menu" class="space-y-3">
+                <div class="draggable bg-indigo-500 text-white p-3 rounded-lg cursor-move shadow-sm hover:shadow-md button"
+                    data-type="button" onclick="alert('Button added!')">Button</div>
+                <div class="draggable bg-green-500 text-white p-3 rounded-lg cursor-move shadow-sm hover:shadow-md button"
+                    data-type="text" onclick="alert('Text added!')">Text</div>
+                <div class="draggable bg-purple-500 text-white p-3 rounded-lg cursor-move shadow-sm hover:shadow-md button"
+                    data-type="image" onclick="alert('Image added!')">Image</div>
+            </div>
+            <h2 class="text-xl font-semibold text-gray-800 mt-6 mb-4">Plugins</h2>
+            <ul id="plugin-list" class="space-y-2 text-sm">
+                <li><a href="#" class="text-gray-600 hover:text-indigo-500 transition-colors"
+                        onclick="alert('Plugin 1 clicked')">Plugin 1</a></li>
+                <li><a href="#" class="text-gray-600 hover:text-indigo-500 transition-colors"
+                        onclick="alert('Plugin 2 clicked')">Plugin 2</a></li>
+            </ul>
+            <button id="plugin-settings"
+                class="mt-4 bg-indigo-600 text-white p-3 rounded-lg w-full hover:bg-indigo-500 button shadow"
+                onclick="alert('Manage Plugins')">Manage Plugins</button>
+        </aside>
+
+        <main id="canvas" class="flex-1 relative bg-white m-6 rounded-xl border border-gray-200 shadow-inner
+             min-h-[60vh] md:min-h-[70vh] lg:min-h-[80vh] transition-all duration-300">
+        </main>
+
+
+        <!-- File Manager -->
+        <aside class="w-64 bg-white p-6 overflow-y-auto shadow-md md:block hidden rounded-l-xl">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Projects</h2>
+            <ul id="file-list" class="space-y-2 text-sm">
+                <li><a href="#" class="text-gray-600 hover:text-indigo-500 transition-colors"
+                        onclick="alert('Project 1 opened')">Project 1</a></li>
+                <li><a href="#" class="text-gray-600 hover:text-indigo-500 transition-colors"
+                        onclick="alert('Project 2 opened')">Project 2</a></li>
+            </ul>
+            <div class="mt-4 space-y-2">
+                <button id="upload-file"
+                    class="bg-indigo-600 text-white p-3 rounded-lg w-full hover:bg-indigo-500 button shadow"
+                    onclick="alert('Upload clicked')">Upload</button>
+                <button id="download-file"
+                    class="bg-indigo-600 text-white p-3 rounded-lg w-full hover:bg-indigo-500 button shadow"
+                    onclick="alert('Download clicked')">Download</button>
+                <button id="save-project"
+                    class="bg-green-600 text-white p-3 rounded-lg w-full hover:bg-green-500 button shadow"
+                    onclick="alert('Save clicked')">Save</button>
+            </div>
+            <h2 class="text-xl font-semibold text-gray-800 mt-6 mb-4">History</h2>
+            <div class="space-y-2">
+                <button id="undo" class="bg-gray-600 text-white p-3 rounded-lg w-full hover:bg-gray-500 button shadow"
+                    onclick="alert('Undo clicked')">Undo</button>
+                <button id="redo" class="bg-gray-600 text-white p-3 rounded-lg w-full hover:bg-gray-500 button shadow"
+                    onclick="alert('Redo clicked')">Redo</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Footer -->
+    <footer
+        class="bg-gradient-to-r from-indigo-600 to-blue-700 text-white p-4 flex flex-col md:flex-row md:justify-between md:items-center gap-4 mt-0 shadow-xl">
+
+        <!-- Left side buttons -->
+        <div id="quick-actions" class="flex flex-wrap justify-center md:justify-start gap-2">
+            <button id="delete" class="bg-red-600 px-4 py-2 rounded-lg button hover:bg-red-500 shadow w-full sm:w-auto">
+                Delete
+            </button>
+            <button id="duplicate"
+                class="bg-indigo-600 px-4 py-2 rounded-lg button hover:bg-indigo-500 shadow w-full sm:w-auto">
+                Duplicate
+            </button>
+            <button id="group"
+                class="bg-purple-600 px-4 py-2 rounded-lg button hover:bg-purple-500 shadow w-full sm:w-auto">
+                Group
+            </button>
+            <button id="ungroup"
+                class="bg-purple-600 px-4 py-2 rounded-lg button hover:bg-purple-500 shadow w-full sm:w-auto">
+                Ungroup
+            </button>
+        </div>
+
+        <!-- Right side status -->
+        <div id="status"
+            class="text-sm font-medium bg-[#031321] text-white text-center md:text-right rounded-full px-6 py-2">
+            Ready
+        </div>
+    </footer>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/interactjs/dist/interact.min.js"></script>
+    <script>
+        // Make sidebar items draggable
+        interact('.draggable').draggable({
+            inertia: true,
+            autoScroll: true,
+            listeners: {
+                move(event) {
+                    let target = event.target;
+                    let x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                    let y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+                    target.setAttribute('data-x', x);
+                    target.setAttribute('data-y', y);
+                },
+                end(event) {
+                    // reset after drag from sidebar
+                    event.target.style.transform = "";
+                    event.target.removeAttribute('data-x');
+                    event.target.removeAttribute('data-y');
+                }
+            }
+        });
+
+        // Canvas as dropzone
+        interact('#canvas').dropzone({
+            accept: '.draggable',
+            overlap: 0.5,
+            ondrop(event) {
+                let type = event.relatedTarget.getAttribute('data-type');
+                let newEl = document.createElement('div');
+                newEl.className = "absolute px-4 py-2 rounded-lg shadow text-white cursor-move";
+                newEl.style.top = (event.dragEvent.pageY - event.target.getBoundingClientRect().top - 30) + "px";
+                newEl.style.left = (event.dragEvent.pageX - event.target.getBoundingClientRect().left - 60) + "px";
+
+                if (type === "button") {
+                    newEl.innerText = "New Button";
+                    newEl.classList.add("bg-indigo-600");
+                } else if (type === "text") {
+                    newEl.innerText = "New Text";
+                    newEl.classList.add("bg-green-600");
+                } else if (type === "image") {
+                    newEl.innerText = "Image Box";
+                    newEl.classList.add("bg-purple-600");
+                }
+
+                newEl.classList.add("draggable-inside");
+                event.target.appendChild(newEl);
+                makeInsideDraggable(newEl);
+            }
+        });
+
+        // Make dropped elements draggable inside canvas
+        function makeInsideDraggable(el) {
+            interact(el).draggable({
+                listeners: {
+                    move(event) {
+                        let target = event.target;
+                        let x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                        let y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+                        target.style.transform = `translate(${x}px, ${y}px)`;
+                        target.setAttribute('data-x', x);
+                        target.setAttribute('data-y', y);
+                    }
+                }
+            });
+        }
+
+        const toggleBtn = document.getElementById("mobile-menu-toggle");
+        const sidebar = document.querySelector("aside");
+
+        toggleBtn.addEventListener("click", () => {
+            sidebar.classList.toggle("hidden");
+        });
+    </script>
+</body>
+
+</html>
